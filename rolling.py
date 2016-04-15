@@ -19,8 +19,8 @@ startTime = datetime.now()
 filePath = '../../01_TIF/'
 cascPath = '../02_classifier_training/classifier/cascade.xml'
 
-frame_rate = 0.040 #seconds
-pixel_dimension = 0.694 #micro meter
+frame_rate = 0.060 #seconds
+pixel_dimension = 0.363 #micro meter
 
 numberClosestFrames = 50 # the number of frames to average
 
@@ -34,7 +34,7 @@ xRangeCandidateParticles = 30 #range of x values to search for candidate particl
 minimumTrajectoryLength = 10 #minimum length for trajectory to be considered valid
 
 
-imageList = sorted([ f for f in listdir(filePath) if isfile(join(filePath,f)) ])#[:300] #debugging
+imageList = sorted([ f for f in listdir(filePath) if isfile(join(filePath,f)) ])#[:150] #debugging
 numberOfFrames = len(imageList)
 experimentName  = re.sub('(_\d+\.\w+)', '', imageList[0])
 fontPath = "/usr/share/fonts/truetype/ubuntu-font-family/Ubuntu-R.ttf"
@@ -78,9 +78,9 @@ def particle_chooser(df_particles, index, numberOfLookaheadFrames):
     candidate_particles = candidate_particles[(candidate_particles['y_centroid'] > int(particle.y_centroid))]
     candidate_particles = candidate_particles.sort(['y_centroid'], ascending=[True])
     chosen_particle = candidate_particles[:1]
-    chosen_particle['particle_ID'] = int(particle['particle_ID'])
+    chosen_particle['particle_id'] = int(particle['particle_id'])
     if chosen_particle.shape[0]>0:
-        df_particles.loc[chosen_particle.index[0],'particle_ID'] = int(chosen_particle['particle_ID'])
+        df_particles.loc[chosen_particle.index[0],'particle_id'] = int(chosen_particle['particle_id'])
     return chosen_particle
 
 #02 - Detect particles
@@ -105,35 +105,35 @@ for frame in range(0, numberOfFrames):
 x_centroid = df_particles.x + (df_particles.w / 2); df_particles['x_centroid'] = x_centroid
 y_centroid = df_particles.y + (df_particles.h / 2); df_particles['y_centroid'] = y_centroid
 df_particles = df_particles.sort(['frame_no', 'y_centroid'], ascending=[True, True]).reset_index(drop=True)
-df_particles["particle_ID"] = Series(range(1,df_particles.loc[df_particles['frame_no'] == df_particles['frame_no'].min()].shape[0]+1))
-df_particles.drop('particle_ID', 1).to_csv('../04_python_results/'+experimentName+'_particle_features.csv', sep=',', index=False)
+df_particles["particle_id"] = Series(range(1,df_particles.loc[df_particles['frame_no'] == 1].shape[0]+1))
+df_particles.drop('particle_id', 1).to_csv('../04_python_results/'+experimentName+'_particle_features.csv', sep=',', index=False)
 
 #03 - Track particles
 for index, row in df_particles.iterrows():
-    if pd.isnull(df_particles.loc[index, 'particle_ID']) == True:
-        max_particle_ID = df_particles.particle_ID.max() 
-        df_particles.loc[index, 'particle_ID'] = max_particle_ID + 1
+    if pd.isnull(df_particles.loc[index, 'particle_id']) == True:
+        max_particle_id = df_particles.particle_id.max() 
+        df_particles.loc[index, 'particle_id'] = max_particle_id + 1
         chosen_particle = particle_chooser(df_particles, index, numberOfLookaheadFrames)
     else:
         chosen_particle = particle_chooser(df_particles, index, numberOfLookaheadFrames)
     print "Linking particles {0} of {1}".format(index+1, len(df_particles))
 
 #04 - Trajectories
-uniqueParticles = np.unique(df_particles[['particle_ID']].values)
+uniqueParticles = np.unique(df_particles[['particle_id']].values)
 uniqueParticles = uniqueParticles.reshape(len(uniqueParticles),1)
 seed = RandomState(9001)
 particleColours = pd.DataFrame(np.concatenate((uniqueParticles, seed.randint(255, size=(len(uniqueParticles),3))), axis=1))
-particleColours.columns = ['particle_ID', 'red', 'green', 'blue']
-trajectories = pd.merge(df_particles, particleColours, on='particle_ID')
-trajectories = trajectories[trajectories.groupby('particle_ID').particle_ID.transform(len) > minimumTrajectoryLength]
-trajectories = trajectories[~trajectories['particle_ID'].isin(trajectories.loc[trajectories['frame_no'].isin([1,len(imageList)])]['particle_ID'].tolist())]
-trajectories['particle_ID'] = trajectories['particle_ID'].rank('dense')
+particleColours.columns = ['particle_id', 'red', 'green', 'blue']
+trajectories = pd.merge(df_particles, particleColours, on='particle_id')
+trajectories = trajectories[trajectories.groupby('particle_id').particle_id.transform(len) > minimumTrajectoryLength]
+trajectories = trajectories[~trajectories['particle_id'].isin(trajectories.loc[trajectories['frame_no'].isin([1,len(imageList)])]['particle_id'].tolist())]
+trajectories['particle_id'] = trajectories['particle_id'].rank('dense')
 trajectories[['x_centroid_microns', 'y_centroid_microns']] = trajectories[['x_centroid', 'y_centroid']] * pixel_dimension
-trajectories[['x_diff', 'y_diff']] = trajectories.groupby(['particle_ID'])[['x_centroid_microns', 'y_centroid_microns']].transform(lambda x: x.diff())
+trajectories[['x_diff', 'y_diff']] = trajectories.groupby(['particle_id'])[['x_centroid_microns', 'y_centroid_microns']].transform(lambda x: x.diff())
 trajectories['velocity'] = np.sqrt(trajectories['x_diff']**2 + trajectories['y_diff']**2)/frame_rate
-trajectories['acceleration'] = trajectories.groupby(['particle_ID'])['velocity'].transform(lambda x: x.diff())/frame_rate
+trajectories['acceleration'] = trajectories.groupby(['particle_id'])['velocity'].transform(lambda x: x.diff())/frame_rate
 trajectories.to_csv('../04_python_results/' + experimentName + '_trajectories.csv', sep=',', encoding='utf-8', index=False)
-trajectories_summary = trajectories.groupby(['particle_ID'])
+trajectories_summary = trajectories.groupby(['particle_id'])
 trajectories_summary = trajectories_summary[['frame_no', 'velocity', 'acceleration']].agg([len, np.median, np.mean, np.std, np.min, np.max]).T.drop_duplicates().T
 trajectories_summary = trajectories_summary.drop(trajectories_summary.columns[[1,2]], axis=1)
 trajectories_summary.columns = trajectories_summary.columns.droplevel(0)
@@ -153,9 +153,9 @@ for frame in range(0, numberOfFrames):
     alpha = 100
     font = ImageFont.truetype(fontPath, fontSize)
     frame_particles = trajectories.loc[trajectories['frame_no'] == frame +1]
-    number_particles_frame = int(frame_particles.particle_ID.count())
+    number_particles_frame = int(frame_particles.particle_id.count())
     for l in range(0, number_particles_frame):
-        particle_ID = str(int(round(frame_particles.iloc[l].particle_ID)))
+        particle_id = str(int(round(frame_particles.iloc[l].particle_id)))
         x_centroid = int(round(frame_particles.iloc[l].x_centroid))
         y_centroid = int(round(frame_particles.iloc[l].y_centroid))
         w = int(round(frame_particles.iloc[l].w))
@@ -168,7 +168,7 @@ for frame in range(0, numberOfFrames):
         overlayDraw.line((x_centroid - w/2, y_centroid - h/2, x_centroid + w/2, y_centroid - h/2), fill=(r, g, b, alpha), width=2)
         overlayDraw.line((x_centroid - w/2, y_centroid - h/2, x_centroid - w/2, y_centroid + h/2), fill=(r, g, b, alpha), width=2)
         overlayDraw.line((x_centroid + w/2, y_centroid - h/2, x_centroid + w/2, y_centroid + h/2), fill=(r, g, b, alpha), width=2)
-        overlayDraw.text((x_centroid- w/2, y_centroid+h/2+10), particle_ID, (r, g, b), font)
+        overlayDraw.text((x_centroid- w/2, y_centroid+h/2+10), particle_id, (r, g, b), font)
     active_frame.paste(overlay, overlay)
     active_frame.save('../04_python_results/05_trajectory/'+imageList[frame].split('.',1)[0]+'.jpg')
     subtractedImages.paste(overlay, overlay)
